@@ -1,0 +1,50 @@
+from flask import Flask, request, send_file, jsonify
+import fitz  # PyMuPDF para edição
+import os
+
+app = Flask(__name__)
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+@app.route("/convert/pdf-to-word", methods=["POST"])
+def convert_pdf_to_word():
+    file = request.files["file"]
+    pdf_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(pdf_path)
+    
+    word_path = pdf_path.replace(".pdf", ".docx")
+    os.system(f"pdf2docx convert {pdf_path} {word_path}")  # Usa pdf2docx CLI
+    
+    return send_file(word_path, as_attachment=True)
+
+@app.route("/edit/add-text", methods=["POST"])
+def add_text_to_pdf():
+    file = request.files["file"]
+    text = request.form["text"]
+    pdf_path = os.path.join(UPLOAD_FOLDER, file.filename)
+    file.save(pdf_path)
+    
+    doc = fitz.open(pdf_path)
+    for page in doc:
+        page.insert_text((50, 50), text, fontsize=12, color=(1, 0, 0))
+    
+    edited_path = pdf_path.replace(".pdf", "_edited.pdf")
+    doc.save(edited_path)
+    return send_file(edited_path, as_attachment=True)
+
+@app.route("/merge", methods=["POST"])
+def merge_pdfs():
+    files = request.files.getlist("files")
+    merger = fitz.open()
+    
+    for file in files:
+        pdf_path = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(pdf_path)
+        merger.insert_pdf(fitz.open(pdf_path))
+    
+    merged_path = os.path.join(UPLOAD_FOLDER, "merged.pdf")
+    merger.save(merged_path)
+    return send_file(merged_path, as_attachment=True)
+
+if __name__ == "__main__":
+    app.run(debug=True)
